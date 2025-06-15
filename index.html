@@ -3,27 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Circular Ping Pong with Hand Tracking</title>
+    <title>Spin Control</title>
   </head>
   <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <video id="videoFeed" autoplay muted></video>
-    <video id="hiddenVideo" autoplay muted></video>
+    <!-- Game Canvas (hidden by default, shown only during gameplay) -->
+    <canvas id="gameCanvas" width="800" height="600" style="display: none;"></canvas>
+    
+    <!-- Video elements for hand tracking (hidden from user) -->
+    <video id="videoFeed" autoplay muted playsinline webkit-playsinline style="display: none;"></video>
+    <video id="hiddenVideo" autoplay muted playsinline webkit-playsinline style="display: none;"></video>
 
-    <div id="instructions">
-      <h3>Instructions:</h3>
-      <p>• Make a fist and extend your thumb (thumbs-up/down gesture)</p>
-      <p>• <strong>Thumbs Up</strong> = Paddles rotate clockwise (faster = higher up)</p>
-      <p>• <strong>Thumbs Down</strong> = Paddles rotate counterclockwise (faster = lower down)</p>
-      <p>• <strong>Thumb Horizontal</strong> = Paddles stop moving (dead zone)</p>
-      <p>• Keep the ball bouncing inside the circle with your paddles</p>
-      <p>• Each successful paddle hit increases your score</p>
-    </div>
-
-    <div id="score">Score: 0</div>
-    <div id="status">Initializing camera...</div>
-    <button id="restartButton" style="display: none;">🔄 Restart Game</button>
-
+    <!-- Scenes will be dynamically inserted here -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

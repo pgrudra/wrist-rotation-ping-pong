@@ -10,10 +10,10 @@ export default class HandTracker {
     this.processingWidth = 640;
     this.processingHeight = 480;
     
-    // Thumb angle tracking for speed-based control
-    this.lastThumbAngle = Math.PI / 2; // Start at horizontal (90°)
+    // Thumb angle tracking for tilt-based control
+    this.lastThumbAngle = 0; // Start at thumbs up (0°)
     this.thumbAngleHistory = [];
-    this.deadZoneAngle = Math.PI / 12; // ±15° dead zone around horizontal
+    this.deadZoneAngle = Math.PI / 12; // ±15° dead zone around thumbs up
     this.maxRotationSpeed = 0.02; // Reduced maximum rotation speed per frame
     this.smoothingFactor = 0.7; // Smoothing for stable thumb tracking
 
@@ -22,7 +22,7 @@ export default class HandTracker {
     });
 
     this.hands.setOptions({
-      maxNumHands: 1,
+      maxNumHands: 2, // Allow both hands
       modelComplexity: 1,
       minDetectionConfidence: 0.7, // Higher for curled palm detection
       minTrackingConfidence: 0.7   // Higher for stable palm tracking
@@ -66,108 +66,114 @@ export default class HandTracker {
     if (!this.isRunning || !results.multiHandLandmarks?.length) {
       this.onThumbControl({ 
         handDetected: false, 
-        thumbAngle: Math.PI / 2,
+        leftHand: null,
+        rightHand: null,
         rotationSpeed: 0,
         confidence: 0,
-        isInDeadZone: true
+        gesture: "none"
       });
       return;
     }
 
     try {
-      const landmarks = results.multiHandLandmarks[0];
+      const hands = results.multiHandLandmarks;
+      const handedness = results.multiHandedness;
       
-      // Optimized for thumbs-up/down control (fist with thumb extended)
-      const wrist = landmarks[0];           // Wrist base
-      const thumbTip = landmarks[4];        // Thumb tip (primary)
-      const thumbIP = landmarks[3];         // Thumb intermediate joint
-      const thumbMCP = landmarks[2];        // Thumb base joint
-
-      if (!wrist || !thumbTip) {
-        this.onThumbControl({ 
-          handDetected: false, 
-          thumbAngle: Math.PI / 2,
-          rotationSpeed: 0,
-          confidence: 0
-        });
-        return;
-      }
-
-      // Calculate thumb angle relative to wrist
-      // 0° = thumbs up, 90° = horizontal, 180° = thumbs down
-      let rawThumbAngle = Math.atan2(thumbTip.y - wrist.y, thumbTip.x - wrist.x);
+      let leftHand = null;
+      let rightHand = null;
       
-      // Convert to standard orientation (0° = up, 90° = right, 180° = down)
-      rawThumbAngle = rawThumbAngle + Math.PI / 2;
-      if (rawThumbAngle < 0) rawThumbAngle += 2 * Math.PI;
-      if (rawThumbAngle > 2 * Math.PI) rawThumbAngle -= 2 * Math.PI;
-      
-      // Use backup method if primary seems unreliable
-      let thumbAngle = rawThumbAngle;
-      let confidence = 0.9;
-      let method = "wrist-thumb";
-      
-      // Backup: Use thumb direction from base to tip
-      if (thumbMCP) {
-        const thumbDirection = Math.atan2(thumbTip.y - thumbMCP.y, thumbTip.x - thumbMCP.x);
-        let backupAngle = thumbDirection + Math.PI / 2;
-        if (backupAngle < 0) backupAngle += 2 * Math.PI;
-        if (backupAngle > 2 * Math.PI) backupAngle -= 2 * Math.PI;
+      // Process each detected hand
+      for (let i = 0; i < hands.length && i < 2; i++) {
+        const landmarks = hands[i];
+        const handType = handedness[i].label; // "Left" or "Right" from the user's perspective
         
-        // Blend angles if both are available
-        thumbAngle = thumbAngle * 0.7 + backupAngle * 0.3;
-        confidence = 0.95;
-        method = "blended";
-      }
-      // Apply smoothing to thumb angle
-      if (this.thumbAngleHistory.length > 0) {
-        const lastAngle = this.thumbAngleHistory[this.thumbAngleHistory.length - 1];
-        thumbAngle = thumbAngle * (1 - this.smoothingFactor) + lastAngle * this.smoothingFactor;
+        const wrist = landmarks[0];
+        const indexFingerTip = landmarks[8];
+        
+        if (!wrist || !indexFingerTip) continue;
+        
+        // Calculate index finger direction relative to wrist
+        // Note: Camera is mirrored, so we don't invert coordinates
+        const fingerDirection = Math.atan2(indexFingerTip.y - wrist.y, indexFingerTip.x - wrist.x);
+        
+        // Convert to degrees for easier interpretation
+        let fingerAngleDegrees = (fingerDirection * 180 / Math.PI);
+        
+        // Normalize to [0, 360)
+        if (fingerAngleDegrees < 0) fingerAngleDegrees += 360;
+        
+        // Determine if index finger is pointing left or right
+        // Left pointing: 135° to 225° (±45° around 180°)
+        // Right pointing: 315° to 45° (±45° around 0°/360°)
+        const isPointingLeft = fingerAngleDegrees >= 135 && fingerAngleDegrees <= 225;
+        const isPointingRight = fingerAngleDegrees >= 315 || fingerAngleDegrees <= 45;
+        
+        const handData = {
+          type: handType,
+          fingerAngle: fingerAngleDegrees,
+          isPointingLeft: isPointingLeft,
+          isPointingRight: isPointingRight,
+          confidence: 0.9
+        };
+        
+        if (handType === "Left") {
+          leftHand = handData;
+        } else {
+          rightHand = handData;
+        }
       }
       
-      // Keep history for smoothing
-      this.thumbAngleHistory.push(thumbAngle);
-      if (this.thumbAngleHistory.length > 3) {
-        this.thumbAngleHistory.shift();
-      }
-      
-      // Calculate rotation speed based on thumb position
-      const horizontalAngle = Math.PI / 2; // 90° = horizontal
-      const angleFromHorizontal = thumbAngle - horizontalAngle;
-      
+      // Determine rotation based on gesture rules
       let rotationSpeed = 0;
+      let gesture = "none";
+      let confidence = 0;
       
-      // Apply dead zone around horizontal position
-      if (Math.abs(angleFromHorizontal) > this.deadZoneAngle) {
-        // Map angle to speed (-1 to +1)
-        // Positive = clockwise (thumbs up), Negative = counterclockwise (thumbs down)
-        const effectiveAngle = angleFromHorizontal - Math.sign(angleFromHorizontal) * this.deadZoneAngle;
-        const maxAngle = Math.PI / 2 - this.deadZoneAngle; // Maximum usable angle
-        
-        rotationSpeed = -effectiveAngle / maxAngle; // Negative because up = positive angle but clockwise rotation
-        rotationSpeed = Math.max(-1, Math.min(1, rotationSpeed)); // Clamp to [-1, 1]
-        rotationSpeed *= this.maxRotationSpeed; // Scale to actual speed
-        
-        console.log(`Thumb control [${method}]: angle=${(thumbAngle * 180/Math.PI).toFixed(1)}°, speed=${(rotationSpeed * 180/Math.PI).toFixed(3)}°/frame`);
+      const hasValidLeftHand = leftHand && leftHand.isPointingRight;
+      const hasValidRightHand = rightHand && rightHand.isPointingLeft;
+      
+      if (hasValidLeftHand && hasValidRightHand) {
+        // Both hands detected with valid gestures = no motion
+        gesture = "both_hands";
+        rotationSpeed = 0;
+        confidence = Math.min(leftHand.confidence, rightHand.confidence);
+      } else if (hasValidLeftHand && !rightHand) {
+        // Only left hand pointing right = clockwise
+        gesture = "left_hand_clockwise";
+        rotationSpeed = this.maxRotationSpeed;
+        confidence = leftHand.confidence;
+      } else if (hasValidRightHand && !leftHand) {
+        // Only right hand pointing left = anti-clockwise
+        gesture = "right_hand_anticlockwise";
+        rotationSpeed = -this.maxRotationSpeed;
+        confidence = rightHand.confidence;
       } else {
-        console.log(`Thumb control [${method}]: angle=${(thumbAngle * 180/Math.PI).toFixed(1)}° (in dead zone)`);
+        // No valid gestures detected
+        gesture = "invalid";
+        rotationSpeed = 0;
+        confidence = 0;
       }
+      
+      console.log(`Dual hand control: Left=${leftHand ? (leftHand.isPointingRight ? 'index pointing right' : 'invalid') : 'none'}, Right=${rightHand ? (rightHand.isPointingLeft ? 'index pointing left' : 'invalid') : 'none'}, Gesture=${gesture}, Speed=${rotationSpeed.toFixed(3)}`);
 
-      // Send thumb control data to game
+      // Send control data to game
       this.onThumbControl({
-        handDetected: true,
-        thumbAngle: thumbAngle,
+        handDetected: leftHand !== null || rightHand !== null,
+        leftHand: leftHand,
+        rightHand: rightHand,
         rotationSpeed: rotationSpeed,
         confidence: confidence,
-        isInDeadZone: Math.abs(angleFromHorizontal) <= this.deadZoneAngle
+        gesture: gesture
       });
 
     } catch (error) {
       console.warn("Hand tracking processing error:", error);
-      this.onWristRotation({ 
+      this.onThumbControl({ 
         handDetected: false, 
-        angle: 0, 
-        rotationDelta: 0 
+        leftHand: null,
+        rightHand: null,
+        rotationSpeed: 0,
+        confidence: 0,
+        gesture: "error"
       });
     }
   }
