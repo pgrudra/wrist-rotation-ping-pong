@@ -412,7 +412,7 @@ body {
 /* Specific styles for play scene rotation buttons */
 .play-scene .clockwise-btn .btn-label,
 .play-scene .anticlockwise-btn .btn-label {
-  font-size: 0.6rem;
+  font-size: 0.5rem;
 }
 
 .game-ui {
