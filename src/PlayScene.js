@@ -41,7 +41,7 @@ export default class PlayScene {
         
         // Frame rate independence
         this.lastFrameTime = 0;
-        this.targetFPS = 60;
+        this.targetFPS = 40; // Lower target FPS for smoother mobile experience
         this.deltaTime = 1000 / this.targetFPS;
         
         this.createPlayUI();
