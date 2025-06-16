@@ -135,6 +135,7 @@ export default class BootScene {
         this.isInitialized = true;
         this.loadingContainer.style.display = 'none';
         this.instructionsContainer.style.display = 'block';
+        this.statusElement.textContent = "Camera ready! Point index finger at buttons to interact.";
         this.startButton.style.display = 'block';
     }
     
