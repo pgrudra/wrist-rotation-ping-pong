@@ -39,6 +39,11 @@ export default class PlayScene {
         this.score = 0;
         this.gameRunning = true;
         
+        // Frame rate independence
+        this.lastFrameTime = 0;
+        this.targetFPS = 60;
+        this.deltaTime = 1000 / this.targetFPS;
+        
         this.createPlayUI();
         this.startGameLoop();
     }
@@ -211,16 +216,26 @@ export default class PlayScene {
         return segments;
     }
     
-    updateBall() {
+    updateBall(currentTime) {
         if (!this.gameRunning || this.gameOver) return;
         
-        if (this.currentRotationSpeed !== 0) {
-            this.paddle1Angle -= this.currentRotationSpeed;
-            this.paddle2Angle -= this.currentRotationSpeed;
+        // Calculate delta time for frame rate independence
+        if (this.lastFrameTime === 0) {
+            this.lastFrameTime = currentTime;
+            return;
         }
         
-        this.ball.x += this.ball.vx;
-        this.ball.y += this.ball.vy;
+        const deltaTime = currentTime - this.lastFrameTime;
+        this.lastFrameTime = currentTime;
+        const frameMultiplier = deltaTime / (1000 / this.targetFPS);
+        
+        if (this.currentRotationSpeed !== 0) {
+            this.paddle1Angle -= this.currentRotationSpeed * frameMultiplier;
+            this.paddle2Angle -= this.currentRotationSpeed * frameMultiplier;
+        }
+        
+        this.ball.x += this.ball.vx * frameMultiplier;
+        this.ball.y += this.ball.vy * frameMultiplier;
         
         const distFromCenter = Math.sqrt(
             Math.pow(this.ball.x - this.centerX, 2) + 
@@ -572,14 +587,14 @@ export default class PlayScene {
     }
     
     startGameLoop() {
-        const gameLoop = () => {
+        const gameLoop = (currentTime) => {
             if (this.gameRunning && !this.gameOver) {
-                this.updateBall();
+                this.updateBall(currentTime);
                 this.render();
                 requestAnimationFrame(gameLoop);
             }
         };
-        gameLoop();
+        requestAnimationFrame(gameLoop);
     }
     
     endGame() {
