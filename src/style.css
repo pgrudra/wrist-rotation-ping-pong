@@ -228,6 +228,150 @@ body {
   z-index: 500;
 }
 
+/* FULLSCREEN CAMERA FEED */
+.camera-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 501;
+  overflow: hidden;
+}
+
+#fullscreenVideoFeed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* Mirror effect */
+  background: #000;
+}
+
+/* GAME CANVAS OVERLAY */
+.game-canvas-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 502;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+}
+
+#gameCanvasOverlay {
+  display: block;
+  max-width: 90vw;
+  max-height: 70vh;
+  width: auto;
+  height: auto;
+  border: 3px solid rgba(0, 255, 255, 0.8);
+  border-radius: 20px;
+  background: transparent;
+}
+
+/* VIRTUAL BUTTONS */
+.virtual-buttons {
+  position: absolute;
+  bottom: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 300px;
+  z-index: 503;
+}
+
+.virtual-button {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 4px solid;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.clockwise-btn {
+  border-color: #00ff80;
+  color: #00ff80;
+}
+
+.anticlockwise-btn {
+  border-color: #ff8000;
+  color: #ff8000;
+}
+
+.virtual-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.virtual-button.active {
+  transform: scale(1.2);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 40px currentColor;
+}
+
+.clockwise-btn.active {
+  background: rgba(0, 255, 128, 0.2);
+  box-shadow: 0 0 40px #00ff80;
+}
+
+.anticlockwise-btn.active {
+  background: rgba(255, 128, 0, 0.2);
+  box-shadow: 0 0 40px #ff8000;
+}
+
+.start-game-btn {
+  border-color: #00ff80;
+  color: #00ff80;
+}
+
+.start-game-btn.active {
+  background: rgba(0, 255, 128, 0.2);
+  box-shadow: 0 0 40px #00ff80;
+}
+
+.restart-game-btn {
+  border-color: #ff0080;
+  color: #ff0080;
+}
+
+.restart-game-btn.active {
+  background: rgba(255, 0, 128, 0.2);
+  box-shadow: 0 0 40px #ff0080;
+}
+
+.menu-btn {
+  border-color: #888;
+  color: #888;
+}
+
+.menu-btn.active {
+  background: rgba(136, 136, 136, 0.2);
+  box-shadow: 0 0 40px #888;
+}
+
+.btn-icon {
+  font-size: 2.5rem;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.btn-label {
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
 .game-ui {
   position: absolute;
   top: 0;
@@ -235,7 +379,7 @@ body {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 600;
+  z-index: 504;
 }
 
 .score-display {
@@ -248,21 +392,26 @@ body {
   text-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
   font-weight: bold;
   text-align: center;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 10px 20px;
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
 }
 
 .status-display {
   position: absolute;
-  bottom: 30px;
+  top: 30%;
   left: 50%;
   transform: translateX(-50%);
   color: #00ffff;
   font-size: 1rem;
-  background: rgba(0, 17, 34, 0.8);
+  background: rgba(0, 17, 34, 0.9);
   padding: 10px 20px;
   border-radius: 20px;
   border: 2px solid #00ffff;
   text-align: center;
   max-width: 80%;
+  backdrop-filter: blur(10px);
 }
 
 /* GAME OVER SCENE STYLES */
@@ -405,6 +554,22 @@ body {
   color: #ddd;
 }
 
+.gesture-instruction {
+  margin: 1.5rem 0;
+  padding: 15px;
+  background: rgba(0, 255, 255, 0.1);
+  border: 2px solid #00ffff;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.gesture-instruction p {
+  margin: 0;
+  color: #00ffff;
+  font-size: 1.1rem;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
 .action-container {
   margin-top: 2rem;
   display: flex;
@@ -458,7 +623,31 @@ body {
   transform: translateY(0);
 }
 
-/* RESPONSIVE STYLES */
+/* RESPONSIVE STYLES FOR VIRTUAL BUTTONS */
+@media (max-width: 768px) {
+  .virtual-buttons {
+    gap: 60px;
+    bottom: 12%;
+  }
+  
+  .virtual-button {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .btn-icon {
+    font-size: 2rem;
+  }
+  
+  .btn-label {
+    font-size: 0.7rem;
+  }
+  
+  #gameCanvasOverlay {
+    max-width: 95vw;
+    max-height: 60vh;
+  }
+
 @media (max-width: 768px) {
   .game-title {
     font-size: 2rem;
@@ -542,6 +731,30 @@ body {
     transform: scaleX(-1) !important;
   }
 }
+
+@media (max-width: 480px) {
+  .virtual-buttons {
+    gap: 50px;
+    bottom: 15%;
+  }
+  
+  .virtual-button {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .btn-icon {
+    font-size: 1.5rem;
+  }
+  
+  .btn-label {
+    font-size: 0.6rem;
+  }
+  
+  #gameCanvasOverlay {
+    max-width: 98vw;
+    max-height: 50vh;
+  }
 
 @media (max-width: 480px) {
   .game-title {
@@ -633,6 +846,29 @@ body {
 }
 
 /* Landscape orientation adjustments */
+@media (max-height: 600px) and (orientation: landscape) {
+  .virtual-buttons {
+    bottom: 8%;
+    gap: 40px;
+  }
+  
+  .virtual-button {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .btn-icon {
+    font-size: 1.2rem;
+  }
+  
+  .btn-label {
+    font-size: 0.5rem;
+  }
+  
+  #gameCanvasOverlay {
+    max-height: 85vh;
+  }
+
 @media (max-height: 600px) and (orientation: landscape) {
   .boot-content {
     padding: 10px;

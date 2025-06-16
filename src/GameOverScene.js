@@ -3,8 +3,22 @@ export default class GameOverScene {
         this.gameManager = gameManager;
         this.finalScore = finalScore;
         
+        // Gesture recognition state
+        this.currentFingerPosition = null;
+        this.buttonHoldStartTime = null;
+        this.activeButton = null;
+        this.requiredHoldTime = 1000; // 1 second hold
+        
         this.createGameOverUI();
         this.setupRestartButton();
+        
+        // Connect to hand tracker if available
+        if (this.gameManager.handTracker) {
+            this.gameManager.handTracker.onThumbControl = (data) => {
+                this.gameManager.onThumbControl(data);
+                this.updateVirtualButtonStates(data);
+            };
+        }
     }
     
     createGameOverUI() {
@@ -20,37 +34,18 @@ export default class GameOverScene {
                     </div>
                 </div>
                 
-                <div class="performance-stats">
-                    ${this.getPerformanceMessage()}
-                </div>
                 
-                <div class="tips-container">
-                    <h3>💡 Pro Tips for Next Time</h3>
-                    <div class="tip-item">
-                        <span class="tip-icon">🎯</span>
-                        <p>Watch for gaps in paddles - they appear every 3 points!</p>
-                    </div>
-                    <div class="tip-item">
-                        <span class="tip-icon">⚡</span>
-                        <p>Red bumps create chaotic bounces - use them strategically!</p>
-                    </div>
-                    <div class="tip-item">
-                        <span class="tip-icon">🌪️</span>
-                        <p>Smooth wrist rotations work better than jerky movements</p>
-                    </div>
-                    <div class="tip-item">
-                        <span class="tip-icon">⏱️</span>
-                        <p>Ball speed increases with score - stay calm!</p>
-                    </div>
-                </div>
+                
                 
                 <div class="action-container">
-                    <button class="restart-button" id="gameOverRestartButton">
-                        🔄 Play Again
-                    </button>
-                    <button class="menu-button" id="gameOverMenuButton">
-                        🏠 Main Menu
-                    </button>
+                    <div class="virtual-button restart-game-btn" id="gameOverRestartButton">
+                        <div class="btn-icon">🔄</div>
+                        <div class="btn-label">Play Again</div>
+                    </div>
+                    <div class="virtual-button menu-btn" id="gameOverMenuButton">
+                        <div class="btn-icon">🏠</div>
+                        <div class="btn-label">Main Menu</div>
+                    </div>
                 </div>
             </div>
         `;
@@ -61,46 +56,6 @@ export default class GameOverScene {
         this.menuButton = document.getElementById('gameOverMenuButton');
     }
     
-    getPerformanceMessage() {
-        const score = this.finalScore;
-        let message = '';
-        let emoji = '';
-        let description = '';
-        
-        if (score === 0) {
-            emoji = '🌱';
-            message = 'Every Expert Was Once a Beginner!';
-            description = 'Don\'t worry - the first hit is always the hardest. Try positioning yourself so the camera can see your thumb clearly.';
-        } else if (score < 5) {
-            emoji = '🎯';
-            message = 'Getting the Hang of It!';
-            description = 'Great start! You\'re learning the basics. Focus on smooth, controlled movements.';
-        } else if (score < 10) {
-            emoji = '🔥';
-            message = 'Building Momentum!';
-            description = 'Nice work! You\'re getting comfortable with the controls. Watch out for those gaps starting to appear.';
-        } else if (score < 20) {
-            emoji = '⭐';
-            message = 'Impressive Skills!';
-            description = 'You\'re handling the increasing difficulty well! Those bumps are starting to make things interesting.';
-        } else if (score < 30) {
-            emoji = '🏆';
-            message = 'Ping Pong Master!';
-            description = 'Outstanding performance! You\'ve mastered the advanced mechanics with gaps and bumps.';
-        } else {
-            emoji = '👑';
-            message = 'Legendary Champion!';
-            description = 'Incredible! You\'ve achieved a legendary score. Your wrist rotation skills are unmatched!';
-        }
-        
-        return `
-            <div class="performance-message">
-                <div class="performance-emoji">${emoji}</div>
-                <h2 class="performance-title">${message}</h2>
-                <p class="performance-description">${description}</p>
-            </div>
-        `;
-    }
     
     setupRestartButton() {
         this.restartButton.addEventListener('click', () => {
@@ -110,6 +65,65 @@ export default class GameOverScene {
         this.menuButton.addEventListener('click', () => {
             this.gameManager.showBootScene();
         });
+    }
+    
+    updateVirtualButtonStates(handData) {
+        this.currentFingerPosition = handData.indexFingerPosition;
+        
+        if (!handData.handDetected || !handData.indexFingerPosition) {
+            this.resetButtonStates();
+            return;
+        }
+        
+        const fingerPos = handData.indexFingerPosition;
+        const restartHit = this.isFingerOverButton(fingerPos, this.restartButton);
+        const menuHit = this.isFingerOverButton(fingerPos, this.menuButton);
+        
+        let currentButton = null;
+        let action = null;
+        
+        if (restartHit) {
+            currentButton = this.restartButton;
+            action = () => this.gameManager.restartGame();
+        } else if (menuHit) {
+            currentButton = this.menuButton;
+            action = () => this.gameManager.showBootScene();
+        }
+        
+        if (currentButton) {
+            if (this.activeButton !== currentButton) {
+                this.resetButtonStates();
+                this.activeButton = currentButton;
+                this.buttonHoldStartTime = Date.now();
+                currentButton.classList.add('active');
+            } else {
+                const holdTime = Date.now() - this.buttonHoldStartTime;
+                const progress = Math.min(holdTime / this.requiredHoldTime, 1);
+                
+                if (progress >= 1) {
+                    action();
+                }
+            }
+        } else {
+            this.resetButtonStates();
+        }
+    }
+    
+    isFingerOverButton(fingerPos, buttonElement) {
+        if (!buttonElement || !fingerPos) return false;
+        
+        const rect = buttonElement.getBoundingClientRect();
+        const x = fingerPos.x * window.innerWidth;
+        const y = fingerPos.y * window.innerHeight;
+        
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    }
+    
+    resetButtonStates() {
+        this.buttonHoldStartTime = null;
+        this.activeButton = null;
+        this.restartButton.classList.remove('active');
+        this.menuButton.classList.remove('active');
     }
     
     hide() {

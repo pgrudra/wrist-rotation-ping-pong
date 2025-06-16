@@ -39,7 +39,11 @@ class GameManager {
     }
     
     onThumbControl(data) {
-        if (data.handDetected && this.currentScene && this.currentScene.updateRotationSpeed) {
+        if (this.currentScene && this.currentScene.updateVirtualButtonStates) {
+            // Use new virtual button system
+            this.currentScene.updateVirtualButtonStates(data);
+        } else if (data.handDetected && this.currentScene && this.currentScene.updateRotationSpeed) {
+            // Fallback to old rotation system
             this.currentRotationSpeed = data.rotationSpeed;
             this.currentScene.updateRotationSpeed(data.rotationSpeed);
         } else {

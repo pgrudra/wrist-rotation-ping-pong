@@ -24,8 +24,8 @@ export default class HandTracker {
     this.hands.setOptions({
       maxNumHands: 2, // Allow both hands
       modelComplexity: 1,
-      minDetectionConfidence: 0.7, // Higher for curled palm detection
-      minTrackingConfidence: 0.7   // Higher for stable palm tracking
+      minDetectionConfidence: 0.5, // Lower for better detection coverage
+      minTrackingConfidence: 0.5   // Lower for more sensitive tracking
     });
 
     this.hands.onResults(this.handleResults.bind(this));
@@ -70,7 +70,8 @@ export default class HandTracker {
         rightHand: null,
         rotationSpeed: 0,
         confidence: 0,
-        gesture: "none"
+        gesture: "none",
+        indexFingerPosition: null
       });
       return;
     }
@@ -81,6 +82,7 @@ export default class HandTracker {
       
       let leftHand = null;
       let rightHand = null;
+      let indexFingerPosition = null;
       
       // Process each detected hand
       for (let i = 0; i < hands.length && i < 2; i++) {
@@ -92,69 +94,69 @@ export default class HandTracker {
         
         if (!wrist || !indexFingerTip) continue;
         
-        // Calculate index finger direction relative to wrist
-        // Note: Camera is mirrored, so we don't invert coordinates
-        const fingerDirection = Math.atan2(indexFingerTip.y - wrist.y, indexFingerTip.x - wrist.x);
+        // Store the index finger position (normalized coordinates)
+        // Mirror the x-coordinate since video feed is mirrored
+        const rawX = 1.0 - indexFingerTip.x; // Mirror horizontally
+        const rawY = indexFingerTip.y;
         
-        // Convert to degrees for easier interpretation
-        let fingerAngleDegrees = (fingerDirection * 180 / Math.PI);
+        // FIX: Removed the flawed "correction" logic.
+        // The raw, normalized coordinates from MediaPipe should be used directly.
+        // The mapping to the screen/canvas space is handled correctly in PlayScene.js.
+        indexFingerPosition = {
+            x: rawX,
+            y: rawY
+        };
         
-        // Normalize to [0, 360)
-        if (fingerAngleDegrees < 0) fingerAngleDegrees += 360;
-        
-        // Determine if index finger is pointing left or right
-        // Left pointing: 135° to 225° (±45° around 180°)
-        // Right pointing: 315° to 45° (±45° around 0°/360°)
-        const isPointingLeft = fingerAngleDegrees >= 135 && fingerAngleDegrees <= 225;
-        const isPointingRight = fingerAngleDegrees >= 315 || fingerAngleDegrees <= 45;
-        
+        // The rest of the gesture detection logic remains the same.
         const handData = {
-          type: handType,
-          fingerAngle: fingerAngleDegrees,
-          isPointingLeft: isPointingLeft,
-          isPointingRight: isPointingRight,
-          confidence: 0.9
+          landmarks,
+          confidence: handedness[i].score,
+          handType,
         };
         
         if (handType === "Left") {
-          leftHand = handData;
-        } else {
-          rightHand = handData;
+            leftHand = handData;
+        } else if (handType === "Right") {
+            rightHand = handData;
         }
       }
-      
-      // Determine rotation based on gesture rules
+
       let rotationSpeed = 0;
-      let gesture = "none";
       let confidence = 0;
+      let gesture = "none";
       
-      const hasValidLeftHand = leftHand && leftHand.isPointingRight;
-      const hasValidRightHand = rightHand && rightHand.isPointingLeft;
-      
-      if (hasValidLeftHand && hasValidRightHand) {
-        // Both hands detected with valid gestures = no motion
-        gesture = "both_hands";
-        rotationSpeed = 0;
-        confidence = Math.min(leftHand.confidence, rightHand.confidence);
-      } else if (hasValidLeftHand && !rightHand) {
-        // Only left hand pointing right = clockwise
-        gesture = "left_hand_clockwise";
-        rotationSpeed = this.maxRotationSpeed;
-        confidence = leftHand.confidence;
-      } else if (hasValidRightHand && !leftHand) {
-        // Only right hand pointing left = anti-clockwise
-        gesture = "right_hand_anticlockwise";
-        rotationSpeed = -this.maxRotationSpeed;
+      if (rightHand) {
+        const mirroredIndexTipX = 1.0 - rightHand.landmarks[8].x;
+        const mirroredWristX = 1.0 - rightHand.landmarks[0].x;
+        const fingerDirection = Math.atan2(rightHand.landmarks[8].y - rightHand.landmarks[0].y, mirroredIndexTipX - mirroredWristX);
+        let fingerAngleDegrees = (fingerDirection * 180 / Math.PI);
+        if (fingerAngleDegrees < 0) fingerAngleDegrees += 360;
+
+        if (fingerAngleDegrees > 135 && fingerAngleDegrees < 225) {
+            gesture = "clockwise";
+            rotationSpeed = this.maxRotationSpeed;
+        } else if (fingerAngleDegrees > 315 || fingerAngleDegrees < 45) {
+            gesture = "anti-clockwise";
+            rotationSpeed = -this.maxRotationSpeed;
+        }
         confidence = rightHand.confidence;
-      } else {
-        // No valid gestures detected
-        gesture = "invalid";
-        rotationSpeed = 0;
-        confidence = 0;
+      } else if (leftHand) {
+        const mirroredIndexTipX = 1.0 - leftHand.landmarks[8].x;
+        const mirroredWristX = 1.0 - leftHand.landmarks[0].x;
+        const fingerDirection = Math.atan2(leftHand.landmarks[8].y - leftHand.landmarks[0].y, mirroredIndexTipX - mirroredWristX);
+        let fingerAngleDegrees = (fingerDirection * 180 / Math.PI);
+        if (fingerAngleDegrees < 0) fingerAngleDegrees += 360;
+
+        if (fingerAngleDegrees > 135 && fingerAngleDegrees < 225) {
+            gesture = "clockwise";
+            rotationSpeed = this.maxRotationSpeed;
+        } else if (fingerAngleDegrees > 315 || fingerAngleDegrees < 45) {
+            gesture = "anti-clockwise";
+            rotationSpeed = -this.maxRotationSpeed;
+        }
+        confidence = leftHand.confidence;
       }
       
-      console.log(`Dual hand control: Left=${leftHand ? (leftHand.isPointingRight ? 'index pointing right' : 'invalid') : 'none'}, Right=${rightHand ? (rightHand.isPointingLeft ? 'index pointing left' : 'invalid') : 'none'}, Gesture=${gesture}, Speed=${rotationSpeed.toFixed(3)}`);
-
       // Send control data to game
       this.onThumbControl({
         handDetected: leftHand !== null || rightHand !== null,
@@ -162,7 +164,8 @@ export default class HandTracker {
         rightHand: rightHand,
         rotationSpeed: rotationSpeed,
         confidence: confidence,
-        gesture: gesture
+        gesture: gesture,
+        indexFingerPosition: indexFingerPosition
       });
 
     } catch (error) {
@@ -173,7 +176,8 @@ export default class HandTracker {
         rightHand: null,
         rotationSpeed: 0,
         confidence: 0,
-        gesture: "error"
+        gesture: "error",
+        indexFingerPosition: null
       });
     }
   }
@@ -189,8 +193,5 @@ export default class HandTracker {
     if (this.hands) {
       this.hands.close();
     }
-    this.hands = null;
-    this.camera = null;
-    this.videoElement = null;
   }
 }

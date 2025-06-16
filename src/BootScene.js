@@ -26,32 +26,32 @@ export default class BootScene {
                 
                 <div class="instructions-container" id="instructionsContainer" style="display: none;">
                     <h2>How to Play</h2>
+                   
                     <div class="instruction-item">
-                        <span class="instruction-icon">👉</span>
-                        <p><strong>Left Hand Index Finger Pointing Right</strong> = Paddles rotate clockwise</p>
-                    </div>
-                    <div class="instruction-item">
-                        <span class="instruction-icon">👈</span>
-                        <p><strong>Right Hand Index Finger Pointing Left</strong> = Paddles rotate anti-clockwise</p>
-                    </div>
-                    <div class="instruction-item">
-                        <span class="instruction-icon">✋</span>
-                        <p><strong>No Hands or Both Hands</strong> = Paddles stop moving</p>
-                    </div>
-                    <div class="instruction-item">
-                        <span class="instruction-icon">🎯</span>
-                        <p>Keep the ball bouncing inside the circle with your paddles</p>
+                        <span class="instruction-icon">🏓</span>
+                        <p>Keep the yellow ball bouncing by hitting it with your paddles</p>
                     </div>
                     <div class="instruction-item">
                         <span class="instruction-icon">⚡</span>
-                        <p>Each successful paddle hit increases your score</p>
+                        <p><strong>Scoring:</strong> Each paddle hit = +1 point, ball speed increases with score</p>
+                    </div>
+                    <div class="instruction-item">
+                        <span class="instruction-icon">🕳️</span>
+                        <p><strong>Difficulty:</strong> Gaps appear every 3 points, red bumps every 4 points</p>
+                    </div>
+                    <div class="instruction-item">
+                        <span class="instruction-icon">👆</span>
+                        <p><strong>Controls:</strong> Point index finger at buttons to interact</p>
                     </div>
                     
                 </div>
                 
                 <div class="status-container">
                     <div class="status-text" id="bootStatus">Initializing camera...</div>
-                    <button class="start-button" id="bootStartButton" style="display: none;">🎮 Start Game</button>
+                    <div class="virtual-button start-game-btn" id="bootStartButton" style="display: none;">
+                        <div class="btn-icon">🎮</div>
+                        <div class="btn-label">Start Game</div>
+                    </div>
                 </div>
             </div>
         `;
@@ -62,6 +62,11 @@ export default class BootScene {
         this.instructionsContainer = document.getElementById('instructionsContainer');
         this.statusElement = document.getElementById('bootStatus');
         this.startButton = document.getElementById('bootStartButton');
+        
+        // Gesture recognition state
+        this.currentFingerPosition = null;
+        this.buttonHoldStartTime = null;
+        this.requiredHoldTime = 1000; // 1 second hold
         
         this.setupStartButton();
     }
@@ -94,7 +99,10 @@ export default class BootScene {
                     
                     this.handTracker = new HandTracker(
                         this.videoElement, 
-                        this.gameManager.onThumbControl.bind(this.gameManager)
+                        (data) => {
+                            this.gameManager.onThumbControl(data);
+                            this.updateVirtualButtonStates(data);
+                        }
                     );
                     
                     await this.handTracker.start();
@@ -127,7 +135,6 @@ export default class BootScene {
         this.isInitialized = true;
         this.loadingContainer.style.display = 'none';
         this.instructionsContainer.style.display = 'block';
-        this.statusElement.textContent = "Camera ready! Click Start Game to begin.";
         this.startButton.style.display = 'block';
     }
     
@@ -143,6 +150,52 @@ export default class BootScene {
         this.startButton.addEventListener('click', () => {
             this.gameManager.startGame(this.handTracker);
         });
+    }
+    
+    updateVirtualButtonStates(handData) {
+        this.currentFingerPosition = handData.indexFingerPosition;
+        
+        if (!handData.handDetected || !handData.indexFingerPosition) {
+            this.resetButtonState();
+            return;
+        }
+        
+        const fingerPos = handData.indexFingerPosition;
+        const isOverButton = this.isFingerOverButton(fingerPos, this.startButton);
+        
+        if (isOverButton) {
+            if (!this.buttonHoldStartTime) {
+                this.buttonHoldStartTime = Date.now();
+                this.startButton.classList.add('active');
+            } else {
+                const holdTime = Date.now() - this.buttonHoldStartTime;
+                const progress = Math.min(holdTime / this.requiredHoldTime, 1);
+                
+                if (progress >= 1) {
+                    this.gameManager.startGame(this.handTracker);
+                } else {
+                }
+            }
+        } else {
+            this.resetButtonState();
+        }
+    }
+    
+    isFingerOverButton(fingerPos, buttonElement) {
+        if (!buttonElement || !fingerPos) return false;
+        
+        const rect = buttonElement.getBoundingClientRect();
+        const x = fingerPos.x * window.innerWidth;
+        const y = fingerPos.y * window.innerHeight;
+        
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    }
+    
+    resetButtonState() {
+        this.buttonHoldStartTime = null;
+        this.startButton.classList.remove('active');
+        if (this.isInitialized) {
+            }
     }
     
     hide() {
